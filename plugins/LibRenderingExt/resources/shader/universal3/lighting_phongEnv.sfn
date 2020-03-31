@@ -1,0 +1,105 @@
+#version 120
+#extension GL_ARB_shading_language_420pack: require
+
+/*
+ * This file is part of the open source part of the
+ * Platform for Algorithm Development and Rendering (PADrend).
+ * Web page: http://www.padrend.de/
+ * Copyright (C) 2013-2014 Claudius Jähn <claudius@uni-paderborn.de>
+ * 
+ * PADrend consists of an open source part and a proprietary part.
+ * The open source part of PADrend is subject to the terms of the Mozilla
+ * Public License, v. 2.0. You should have received a copy of the MPL along
+ * with this library; see the file LICENSE. If not, you can obtain one at
+ * http://mozilla.org/MPL/2.0/.
+ */
+
+// ------------------------------------------------------------------------
+// vs
+#ifdef SG_VERTEX_SHADER
+
+struct VertexProperties {
+	vec3 position_cs, normal_cs;
+	float pointSize;
+};
+
+//! \see main.sfn
+void provideLightingVars(in VertexProperties vec){}
+
+#endif
+
+// ------------------------------------------------------------------------
+// fs
+#ifdef SG_FRAGMENT_SHADER
+
+uniform bool sg_cubeEnv_enabled = false;
+uniform float sg_cubeEnvReflection_strength = 0.5;					// default: 0.5 influence to specular lighting
+uniform layout(binding = 4) samplerCube sg_cubeEnvReflection_map;	// default textureUnit 4
+
+uniform float sg_cubeEnvDiffuse_strength = 0.0;						// default: no influence to diffuse lighting
+uniform layout(binding = 4) samplerCube sg_cubeEnvDiffuse_map;		// default textureUnit 4
+
+struct CompositeColor {
+	vec4 ambient, diffuse, specular;
+};
+
+struct SurfaceProperties {
+	vec3 position_cs, normal_cs, tangent_cs;
+	vec4 ambient, diffuse, specular, emission;
+	float shininess;
+};
+
+//! \see sgHelper.sfn
+void sg_addLight(in int sgLightNr,in vec3 position_cs, in vec3 normal_cs, in float shininess, inout CompositeColor lightSum);	
+int sg_getLightCount();				//! \see sgHelper.sfn
+vec4 sg_cameraToWorld(in vec4 hcs);	//! \see sgHelper.sfn
+vec3 rgb2hsv(in vec3 rgb);			//! \see sgHelper.sfn
+vec3 hsv2rgb(in vec3 hsv);			//! \see sgHelper.sfn
+
+//! \see main.sfn
+void calcLighting(in SurfaceProperties surface, out CompositeColor color){
+	CompositeColor lightSum;
+	lightSum.ambient = vec4(0.0);
+	lightSum.diffuse = vec4(0.0);
+	lightSum.specular = vec4(0.0);
+
+	int lightCount = sg_getLightCount();
+
+	if(lightCount==0 && sg_cubeEnvReflection_strength<=0 && sg_cubeEnvDiffuse_strength<=0){ // default lighting
+		lightSum.ambient = vec4(0.3);
+		lightSum.diffuse = vec4(0.7);
+	}
+
+	for(int i = 0; i < 8; i++){
+		if( i >= lightCount )
+			break;
+		sg_addLight(i,surface.position_cs, surface.normal_cs, surface.shininess, lightSum);
+	}
+	
+	// Add environment reflection
+	if(sg_cubeEnvReflection_strength>0.0){
+		vec3 reflection_cs = reflect( surface.position_cs, surface.normal_cs);
+
+		vec3 lightHSV = rgb2hsv( textureCube(sg_cubeEnvReflection_map, sg_cameraToWorld( vec4(reflection_cs,0.0)).xyz ).rgb);
+		lightHSV.z = log(1.0+lightHSV.z); // (?) logarithmic brightness
+		lightSum.specular += vec4(sg_cubeEnvReflection_strength * hsv2rgb(lightHSV),0.0);
+	}
+	
+	// Add environment lighting
+	if(sg_cubeEnvDiffuse_strength>0.0){
+		vec3 lightHSV = rgb2hsv(textureCube(sg_cubeEnvDiffuse_map, sg_cameraToWorld( vec4(surface.normal_cs,0.0)).xyz ).rgb);
+		lightHSV.y *= 0.2; // (?) reduce color influence
+		lightHSV.z = log(1.0+lightHSV.z); // (?) logarithmic brightness
+		lightSum.diffuse += vec4(sg_cubeEnvDiffuse_strength * hsv2rgb(lightHSV),0.0);
+	}
+	
+	lightSum.ambient.a = lightSum.diffuse.a = lightSum.specular.a = 1.0;
+
+	color.ambient = surface.ambient * lightSum.ambient;
+	color.diffuse = surface.diffuse * lightSum.diffuse + surface.emission;
+	color.specular = surface.specular * lightSum.specular;
+
+}
+
+#endif
+// ------------------

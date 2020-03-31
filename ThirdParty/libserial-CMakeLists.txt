@@ -1,0 +1,121 @@
+cmake_minimum_required(VERSION 2.8.8)
+
+project(serial)
+
+set(SERIAL_VERSION_MAJOR 1)
+set(SERIAL_VERSION_MINOR 2)
+set(SERIAL_VERSION_PATCH 0)
+set(SERIAL_VERSION ${SERIAL_VERSION_MAJOR}.${SERIAL_VERSION_MINOR}.${SERIAL_VERSION_PATCH})
+
+set(INCLUDE_INSTALL_DIR include/serial)
+set(BIN_INSTALL_DIR bin)
+set(LIB_INSTALL_DIR lib)
+set(CMAKECONFIG_INSTALL_DIR ${LIB_INSTALL_DIR}/cmake/serial)
+
+## Sources
+ set(serial_SRCS
+     src/serial.cc
+     include/serial/serial.h
+     include/serial/v8stdint.h
+)
+if(APPLE)
+	# If OSX
+	list(APPEND serial_SRCS src/impl/unix.cc)
+	list(APPEND serial_SRCS src/impl/list_ports/list_ports_osx.cc)
+elseif(UNIX)
+    # If unix
+    list(APPEND serial_SRCS src/impl/unix.cc)
+    list(APPEND serial_SRCS src/impl/list_ports/list_ports_linux.cc)
+elseif(WIN32)
+    # If windows
+    #list(APPEND serial_SRCS src/impl/win.cc)
+    list(APPEND serial_SRCS src/impl/win.cc)
+endif()
+
+## Add serial library
+add_library(${PROJECT_NAME} ${serial_SRCS})
+if(APPLE)
+	target_link_libraries(${PROJECT_NAME} ${FOUNDATION_LIBRARY} ${IOKIT_LIBRARY})
+elseif(UNIX)
+	target_link_libraries(${PROJECT_NAME} rt pthread)
+endif()
+
+
+
+set_property(TARGET serial PROPERTY PUBLIC_HEADER
+     include/serial/serial.h
+     include/serial/v8stdint.h
+)
+
+set_property(TARGET serial PROPERTY INCLUDE_DIRECTORIES
+	"${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+
+# Set version of library
+set_target_properties(serial PROPERTIES VERSION ${SERIAL_VERSION}
+                                       SOVERSION ${SERIAL_VERSION_MAJOR})
+
+
+# Install the library
+install(TARGETS serial EXPORT LibraryExport
+	RUNTIME DESTINATION ${BIN_INSTALL_DIR}
+	LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+	ARCHIVE DESTINATION ${LIB_INSTALL_DIR}
+	PUBLIC_HEADER DESTINATION ${INCLUDE_INSTALL_DIR}
+)
+
+
+# Create the configuration files
+include(CMakePackageConfigHelpers)
+get_property(SERIAL_DEFINITIONS TARGET serial PROPERTY COMPILE_DEFINITIONS)
+configure_package_config_file(serialConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/serialConfig.cmake
+                              INSTALL_DESTINATION ${CMAKECONFIG_INSTALL_DIR}
+                              PATH_VARS INCLUDE_INSTALL_DIR CMAKECONFIG_INSTALL_DIR
+                              NO_CHECK_REQUIRED_COMPONENTS_MACRO)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/serialConfigVersion.cmake
+                                 VERSION ${SERIAL_VERSION}
+                                 COMPATIBILITY SameMajorVersion)
+
+# Install the configuration files
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/serialConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/serialConfigVersion.cmake
+        DESTINATION ${CMAKECONFIG_INSTALL_DIR})
+
+		
+# ## Uncomment for example
+# # add_executable(serial_example examples/serial_example.cc)
+# # add_dependencies(serial_example ${PROJECT_NAME})
+# # target_link_libraries(serial_example ${PROJECT_NAME})
+
+# ## Include headers
+# include_directories(include)
+
+# ## Install executable
+# install(TARGETS ${PROJECT_NAME}
+    # ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    # LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+# )
+
+# ## Install headers
+# install(FILES include/serial/serial.h include/serial/v8stdint.h
+  # DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}/serial)
+
+# ### Tests
+# #if(CATKIN_ENABLE_TESTING)
+# #    add_subdirectory(tests)
+# #endif()
+
+
+
+
+
+
+
+# ## Install headers
+# install(FILES include/serial/serial.h include/serial/v8stdint.h
+  # DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}/serial)
+
+# ### Tests
+# #if(CATKIN_ENABLE_TESTING)
+# #    add_subdirectory(tests)
+# #endif()

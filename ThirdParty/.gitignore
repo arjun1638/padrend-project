@@ -1,0 +1,7 @@
+# Ignore build directories
+/build*
+
+# Ignore generated directories
+/x86_64-linux-gnu/
+/x86_64-w64-mingw32/
+

@@ -1,0 +1,5 @@
+{
+	"moduleId" : "ObjectTraits/Misc/HideLinkedNodesTrait",
+	"description" : "Blend out all linked objects (helper)",
+	"displayName" : "Misc/NodeLinkHighlighter"
+}

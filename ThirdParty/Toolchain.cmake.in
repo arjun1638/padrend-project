@@ -1,0 +1,18 @@
+# Name of the target operating system
+SET(CMAKE_SYSTEM_NAME @CMAKE_SYSTEM_NAME@)
+
+# Programs to use
+SET(CMAKE_C_COMPILER @CMAKE_C_COMPILER@)
+SET(CMAKE_CXX_COMPILER @CMAKE_CXX_COMPILER@)
+SET(CMAKE_RC_COMPILER @CMAKE_RC_COMPILER@)
+
+# Location of the target environment
+get_filename_component(ROOT_PATH ${CMAKE_C_COMPILER} ABSOLUTE)
+SET(CMAKE_FIND_ROOT_PATH ${ROOT_PATH} @INSTALL_DIR@)
+
+# Adjust the default behaviour of the FIND_XXX() commands:
+# - Search headers and libraries in the target environment
+# - Search programs in the host environment
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)

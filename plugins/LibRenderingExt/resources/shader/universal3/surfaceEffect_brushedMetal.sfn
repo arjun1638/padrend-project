@@ -1,0 +1,153 @@
+#version 120
+
+/*
+ * This file is part of the open source part of the
+ * Platform for Algorithm Development and Rendering (PADrend).
+ * Web page: http://www.padrend.de/
+ * Copyright (C) 2014 Claudius Jähn <claudius@uni-paderborn.de>
+ * 
+ * PADrend consists of an open source part and a proprietary part.
+ * The open source part of PADrend is subject to the terms of the Mozilla
+ * Public License, v. 2.0. You should have received a copy of the MPL along
+ * with this library; see the file LICENSE. If not, you can obtain one at
+ * http://mozilla.org/MPL/2.0/.
+ */
+ 
+varying vec3 var_normal_ms;
+varying vec4 var_position_hms;
+
+// ------------------
+// vs
+#ifdef SG_VERTEX_SHADER
+
+vec3 sg_getVertexPosition_ms();					//!	\see sgHelper.sfn
+vec3 sg_getVertexNormal_ms();					//!	\see sgHelper.sfn
+
+struct VertexProperties {
+	vec3 position_cs, normal_cs;
+	float pointSize;
+};
+
+//! \see main.sfn
+void provideSurfaceEffectVars(in VertexProperties vec){
+
+    var_normal_ms = sg_getVertexNormal_ms();
+    var_position_hms = vec4(sg_getVertexPosition_ms(),1.0);
+}
+
+#endif
+// ------------------
+// fs
+#ifdef SG_FRAGMENT_SHADER
+
+
+uniform sampler2D sg_texture3,sg_texture4;
+uniform float sg_brushedMetallScaling = 4.0;
+
+struct SurfaceProperties {
+	vec3 position_cs, normal_cs, tangent_cs;
+	vec4 ambient, diffuse, specular, emission;
+	float shininess;
+};
+
+vec4 sg_cameraToWorld(in vec4 hcs);			//!	\see sgHelper.sfn
+vec4 sg_modelToCamera(in vec4 hms);			//!	\see sgHelper.sfn
+
+// temp;
+vec4 sg_modelToClipping(in vec4 hms);
+
+//! \see main.sfn
+void addSurfaceEffects(inout SurfaceProperties surface){
+	//vec4 ws_pos = sg_cameraToWorld(vec4(surface.position_cs,1.0));
+
+//	float SCALE = 4000.0; //1000.0; 
+//	float SCALE = 4.0; //1000.0; 
+	vec3 ORIENTATION = vec3(0,1,0);
+
+	vec3 pos_ms = var_position_hms.xyz / var_position_hms.w * sg_brushedMetallScaling;
+
+
+	int h = int( pos_ms.x * ORIENTATION.x + pos_ms.y * ORIENTATION.y +pos_ms.z * ORIENTATION.z );
+	h ^= (((h) * 1234393) % 0xffffff);
+	//h ^= (((h+ int(pos_ms.x*0.001*mod(float(h),30) )  ) * 1234393) % 0xffffff);
+	h ^= (((h+ int( ( pos_ms.x * ORIENTATION.y + pos_ms.y * ORIENTATION.z +pos_ms.z * ORIENTATION.x )*0.001+float(h)*0.01 )  ) * 1234393) % 0xffffff);
+	h ^= (((h+ int( ( pos_ms.x * ORIENTATION.x + pos_ms.z * ORIENTATION.y +pos_ms.x * ORIENTATION.y )*0.001+float(h)*0.01 )  ) * 1234393) % 0xffffff);
+
+	
+	float v = float(h%1024-512)/512.0;
+	if(abs(v) > 0.6) v = 0.0;
+
+	
+//	surface.normal_cs += sg_modelToCamera( vec4(var_normal_ms,0.0) ).xyz;
+//	surface.normal_cs = normalize( surface.normal_cs );
+	
+	
+	vec3 normal_ms = normalize(var_normal_ms) + ORIENTATION*v*0.05 ;
+	//vec3 
+	//surface.ambient = vec4(normal_ms,1.0);
+	surface.normal_cs = normalize( sg_modelToCamera( vec4(normal_ms,0.0) ).xyz );
+	surface.shininess *= 1.0+v*0.5;
+	
+	
+	// sg_cameraToWorld
+	
+	//float f = surface.normal_cs.x*surface.normal_cs.x + surface.normal_cs.y* surface.normal_cs.y;
+	//surface.ambient += vec4(f,f,f,0);
+	
+	
+	// add some face reflection
+	vec4 obsPos_hws = sg_cameraToWorld( vec4(0,0,0,1) );
+	vec3 obsPos_ws = obsPos_hws.xyz / obsPos_hws.w;
+	
+	vec4 frag_hws = sg_cameraToWorld( vec4(surface.position_cs,1.0) );
+	vec3 frag_ws = frag_hws.xyz / frag_hws.w;
+	
+	vec3 frag_relWs = frag_ws-obsPos_ws;
+	vec3 fragDir_ws = normalize(frag_relWs);
+	
+	vec3 normal_ws = normalize(sg_cameraToWorld( vec4(surface.normal_cs,0) ).xyz);
+	
+	//surface.ambient.rgb = normalize(cross( surface.normal_cs, surface.position_cs )) ;
+	//surface.ambient.rgb = normalize(surface.position_cs);
+	
+	// add some nice looking (but wrong) metallic effect
+	vec3 sideVec =  cross( normal_ws,fragDir_ws);
+	surface.ambient *= 0.0+ (sideVec.x*sideVec.x + sideVec.y*sideVec.y)*(1.5+v*0.5)  ;
+	
+	// -----------------------------------
+	// add reflection (move to lighting)
+//	surface.emission += vec4(reflect(normal_ws,fragDir_ws),0.0);
+
+//	
+//	surface.emission += vec4(length(reflect(fragDir_ws,normal_ws).xy),0.0,0.0,0.0);
+	
+	vec3 reflectionRay_ws = sg_cameraToWorld(vec4(reflect( normalize(surface.position_cs) , surface.normal_cs),0.0)).xyz;
+	
+	vec4 clip=sg_modelToClipping(var_position_hms);
+	clip.xyz/=clip.w;
+//	if(clip.x<-0.9)
+//		surface.emission += vec4(reflect(fragDir_ws,normal_ws),0.0);
+//	else{
+//		surface.emission += vec4(reflectionRay_ws,0.0);
+		surface.emission += vec4(texture2D(sg_texture3,reflectionRay_ws.xy*0.5+0.5).xxx*0.3 ,0.0);
+	
+//	}
+	
+	// global lighting
+//	vec3 normal_ws = sg_cameraToWorld(vec4(surface.normal_cs,0.0)).xyz;
+//	surface.ambient = vec4(0.0);
+//	surface.diffuse = vec4(0.0);
+//	surface.specular = vec4(0.0);
+	surface.emission += vec4(texture2D(sg_texture4,normal_ws.xy*0.5+0.5).xxx*0.8 ,0.0);
+	
+	//surface.normal_cs = ORIENTATION*v*0.001;
+	//surface.ambient *= 1.0-v;
+	
+	//surface.diffuse.r = 1.0;
+/*	surface.diffuse *= 1.0+ms_dist.y;
+	surface.ambient *= 1.0+ms_dist.y;*/
+	//surface.ambient.r = pos_ms.z;
+}
+
+#endif
+// ------------------

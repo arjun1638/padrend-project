@@ -1,0 +1,6 @@
+# - Configuration file for the Sound library
+# It defines the target "Sound".
+#
+
+# Import the exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/SoundTargets.cmake")
